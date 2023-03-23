@@ -1,87 +1,68 @@
-const path = require("path");
-const http = require("http");
-const express = require("express");
-const socketio = require("socket.io");
-const formatMessage = require("./utils/messages");
-const createAdapter = require("@socket.io/redis-adapter").createAdapter;
-const redis = require("redis");
-require("dotenv").config();
-const { createClient } = redis;
-const {
-  userJoin,
-  getCurrentUser,
-  userLeave,
-  getRoomUsers,
-} = require("./utils/users");
+const path = require('path');
+const http = require('http');
+
+const express = require('express');
+const socketio = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
 const io = socketio(server);
 
-// Set static folder
-app.use(express.static(path.join(__dirname, "public")));
+const formatMessage = require('./utils/messages');
+const {userJoin, getCurrentUser, userLeavesChat, getRoomUsers} = require('./utils/users');
+const port = process.env.PORT || 3000;
+const botname = 'Chaton Bot :'
 
-const botName = "ChatCord Bot";
+app.use(express.static(path.join(__dirname, 'public')));
 
-(async () => {
-  pubClient = createClient({ url: "redis://127.0.0.1:6379" });
-  await pubClient.connect();
-  subClient = pubClient.duplicate();
-  io.adapter(createAdapter(pubClient, subClient));
-})();
+io.on('connection', (socket) => {
 
-// Run when client connects
-io.on("connection", (socket) => {
-  console.log(io.of("/").adapter);
-  socket.on("joinRoom", ({ username, room }) => {
-    const user = userJoin(socket.id, username, room);
+  socket.on('joinRoom', ({username, room}) => {
 
-    socket.join(user.room);
+    const user = userJoin(socket.id, username, room)
+    socket.join(user.room)
 
-    // Welcome current user
-    socket.emit("message", formatMessage(botName, "Welcome to ChatCord!"));
-
-    // Broadcast when a user connects
+    //when a new user connects
+    socket.emit('message', formatMessage(botname,'Welcome to chaton'));
     socket.broadcast
       .to(user.room)
-      .emit(
-        "message",
-        formatMessage(botName, `${user.username} has joined the chat`)
-      );
+      .emit('message',  formatMessage(botname,`${user.username} has joined the chat`));
 
-    // Send users and room info
-    io.to(user.room).emit("roomUsers", {
-      room: user.room,
-      users: getRoomUsers(user.room),
-    });
-  });
+    io.to(user.room).emit('roomUsers',{
+      room:user.room,
+      users: getRoomUsers(user.room)
+    })
 
-  // Listen for chatMessage
-  socket.on("chatMessage", (msg) => {
-    const user = getCurrentUser(socket.id);
 
-    io.to(user.room).emit("message", formatMessage(user.username, msg));
-  });
+  //when a user disconnects
+  socket.on('disconnect', ()=>{
+    const user = userLeavesChat(socket.id)
 
-  // Runs when client disconnects
-  socket.on("disconnect", () => {
-    const user = userLeave(socket.id);
-
-    if (user) {
-      io.to(user.room).emit(
-        "message",
-        formatMessage(botName, `${user.username} has left the chat`)
-      );
-
-      // Send users and room info
-      io.to(user.room).emit("roomUsers", {
-        room: user.room,
-        users: getRoomUsers(user.room),
-      });
+    if(user){
+      io.to(user.room)
+        .emit('message',
+        formatMessage(botname,`${user.username} has left the chat`));
     }
-  });
-});
 
-const PORT = process.env.PORT || 3000;
+    io.to(user.room).emit('roomUsers',{
+      room:user.room,
+      users: getRoomUsers(user.room)
+    })
 
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+  })
+})
+
+  //listen for chatMessage
+  socket.on('chatMessage', (message)=>{
+    const user = getCurrentUser(socket.id)
+    io.to(user.room).emit('message',  formatMessage(user.username, message))
+  })
+})
+
+
+
+
+
+server.listen(port, () => {
+  console.log("Server is running on port " + port)
+})
