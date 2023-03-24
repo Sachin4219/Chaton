@@ -1,4 +1,4 @@
-const socket = io();
+const socket = io()
 
 const chatform = document.getElementById('chat-form');
 const chatMessages = document.querySelector('.chat-messages')
@@ -33,7 +33,7 @@ chatform.addEventListener('submit', (e) => {
 
     //get message text
     const msg = e.target.elements.msg.value;
-
+    e.target.elements.msg.value = '';
     //emiting a message to server
     socket.emit('chatMessage', msg);
 });
